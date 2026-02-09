@@ -408,6 +408,20 @@ body.drawer-open .backdrop{opacity: 1; pointer-events: auto}
 
 /* Form basics */
 .form{margin:0}
+.formNotice{
+  border-radius: 14px;
+  background: rgba(10,98,255,.08);
+  color: #0a2b6d;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  white-space: pre-line;
+}
+.formNotice--error{
+  background: rgba(230,62,62,.12);
+  color: #7a0b0b;
+}
 .field{display:flex; flex-direction:column; gap:8px; margin-bottom: 12px}
 .field label{font-size: 13px; font-weight: 800; color: rgba(17,17,17,.72)}
 .field input, .field textarea{

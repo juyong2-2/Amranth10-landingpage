@@ -6,6 +6,129 @@ function q(string $key): string {
   return is_string($v) ? $v : '';
 }
 
+$contactEmail = 'iyjy@duzon119.co.kr';
+$smsRecipient = '01055950680';
+$formErrors = [];
+$formSuccess = false;
+
+$postValue = static function (string $key): string {
+  $value = filter_input(INPUT_POST, $key, FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+  return is_string($value) ? trim($value) : '';
+};
+
+$postArray = static function (string $key): array {
+  $value = filter_input(INPUT_POST, $key, FILTER_DEFAULT, FILTER_REQUIRE_ARRAY);
+  return is_array($value) ? array_map('trim', array_map('strval', $value)) : [];
+};
+
+$sendSms = static function (string $recipient, string $message): bool {
+  $apiUrl = getenv('SMS_API_URL') ?: '';
+  $apiKey = getenv('SMS_API_KEY') ?: '';
+  $sender = getenv('SMS_API_SENDER') ?: '';
+
+  if ($apiUrl === '' || $apiKey === '' || $sender === '') {
+    return false;
+  }
+
+  $payload = json_encode([
+    'to' => $recipient,
+    'from' => $sender,
+    'message' => $message,
+  ], JSON_UNESCAPED_UNICODE);
+
+  if ($payload === false) {
+    return false;
+  }
+
+  $ch = curl_init($apiUrl);
+  if ($ch === false) {
+    return false;
+  }
+
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($ch, CURLOPT_POST, true);
+  curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'Content-Type: application/json',
+    'Authorization: Bearer ' . $apiKey,
+  ]);
+  curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+
+  $response = curl_exec($ch);
+  $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+
+  return $response !== false && $status >= 200 && $status < 300;
+};
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  $company = $postValue('company');
+  $bizno = $postValue('bizno');
+  $name = $postValue('name');
+  $phone = $postValue('phone');
+  $email = $postValue('email');
+  $message = $postValue('message');
+  $modules = $postArray('modules');
+  $budgetNonprofit = $postValue('budget_nonprofit');
+  $prodOutsource = $postValue('prod_outsource');
+  $prodCost = $postValue('prod_cost');
+
+  if ($company === '' || $bizno === '' || $name === '' || $phone === '' || $email === '' || $message === '') {
+    $formErrors[] = '필수 항목을 모두 입력해주세요.';
+  }
+
+  if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    $formErrors[] = '이메일 형식이 올바르지 않습니다.';
+  }
+
+  if ($formErrors === []) {
+    $subject = 'Amaranth 10 도입 상담 요청 - ' . $company;
+    $emailBodyLines = [
+      "회사명: {$company}",
+      "사업자번호: {$bizno}",
+      "담당자: {$name}",
+      "연락처: {$phone}",
+      "이메일: {$email}",
+      "모듈: " . ($modules !== [] ? implode(', ', $modules) : '미선택'),
+      "예산 모듈 비영리 여부: " . ($budgetNonprofit !== '' ? $budgetNonprofit : '미응답'),
+      "생산 모듈 외주 사용: " . ($prodOutsource !== '' ? $prodOutsource : '미응답'),
+      "생산 모듈 원가 사용: " . ($prodCost !== '' ? $prodCost : '미응답'),
+      "문의내용:",
+      $message,
+      '',
+      'UTM 정보:',
+    ];
+
+    foreach ($utm as $key => $value) {
+      if ($value !== '') {
+        $emailBodyLines[] = "{$key}: {$value}";
+      }
+    }
+
+    $emailBody = implode("\n", $emailBodyLines);
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $headers = [
+      'From: Amaranth10 Landing <no-reply@' . $host . '>',
+      'Reply-To: ' . $email,
+      'Content-Type: text/plain; charset=UTF-8',
+    ];
+
+    $mailSent = mail($contactEmail, mb_encode_mimeheader($subject, 'UTF-8'), $emailBody, implode("\r\n", $headers));
+    $smsMessage = "[Amaranth10 상담]\n{$company} / {$name}\n{$phone}\n{$message}";
+    $smsSent = $sendSms($smsRecipient, $smsMessage);
+
+    if ($mailSent && $smsSent) {
+      $formSuccess = true;
+    } else {
+      if (!$mailSent) {
+        $formErrors[] = '이메일 전송에 실패했습니다. 잠시 후 다시 시도해주세요.';
+      }
+      if (!$smsSent) {
+        $formErrors[] = '문자 알림 전송에 실패했습니다. 관리자에게 문의해주세요.';
+      }
+    }
+  }
+}
+
 $utm = [
   'utm_source'   => q('utm_source'),
   'utm_medium'   => q('utm_medium'),
@@ -245,7 +368,15 @@ $utm = [
     </div>
 
     <div class="drawer__body">
-      <form class="form" action="#" method="post" novalidate>
+      <?php if ($formSuccess): ?>
+        <div class="formNotice">요청이 정상적으로 접수되었습니다. 빠르게 연락드리겠습니다.</div>
+      <?php elseif ($formErrors !== []): ?>
+        <div class="formNotice formNotice--error">
+          <?= htmlspecialchars(implode("\n", $formErrors), ENT_QUOTES, 'UTF-8') ?>
+        </div>
+      <?php endif; ?>
+
+      <form class="form" action="" method="post" novalidate>
         <?php foreach ($utm as $k => $v): ?>
           <input type="hidden" name="<?= htmlspecialchars($k, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>" />
         <?php endforeach; ?>
@@ -349,7 +480,7 @@ $utm = [
         </div>
 
         <button class="btn btn--primary btn--block" type="submit">요청 접수</button>
-        <p class="hint">전송/저장 기능(app.js)은 다음 단계에서 분리 구현합니다.</p>
+        <p class="hint">요청 접수 후 담당자가 연락드립니다.</p>
       </form>
     </div>
   </aside>
