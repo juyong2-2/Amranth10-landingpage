@@ -170,14 +170,13 @@
   if (biznoInput) {
     const applyBizno = () => {
       const next = formatBizno(biznoInput.value);
-      if (biznoInput.value !== next) {
-        const cursor = biznoInput.selectionStart || next.length;
-        biznoInput.value = next;
-        biznoInput.setSelectionRange(cursor, cursor);
-      }
+      biznoInput.value = next;
+      const end = next.length;
+      biznoInput.setSelectionRange(end, end);
     };
     biznoInput.addEventListener("input", applyBizno);
     biznoInput.addEventListener("blur", applyBizno);
+    biznoInput.addEventListener("paste", applyBizno);
   }
 
   if (form && submitOverlay) {
