@@ -7,6 +7,6 @@ return [
   'db_pass' => getenv('DB_PASS') ?: '',
   'db_name' => getenv('DB_NAME') ?: 'amaranth10',
   'db_port' => (int) (getenv('DB_PORT') ?: 3306),
-  'admin_email' => getenv('ADMIN_EMAIL') ?: 'iyjy@duzon119.co.kr',
+  'admin_email' => getenv('ADMIN_EMAILS') ?: (getenv('ADMIN_EMAIL') ?: 'iyjy@duzon119.co.kr'),
   'mail_from' => getenv('MAIL_FROM') ?: 'no-reply@localhost',
 ];

@@ -18,7 +18,11 @@ $defaultConfig = [
 $configFile = __DIR__ . '/config.php';
 $config = is_file($configFile) ? require $configFile : [];
 $config = array_merge($defaultConfig, is_array($config) ? $config : []);
-$contactEmail = $config['admin_email'];
+$contactEmailConfig = $config['admin_email'];
+$contactEmails = is_array($contactEmailConfig)
+  ? $contactEmailConfig
+  : array_filter(array_map('trim', explode(',', (string) $contactEmailConfig)));
+$contactEmail = $contactEmails !== [] ? implode(', ', $contactEmails) : '';
 $mailFrom = $config['mail_from'];
 $formErrors = [];
 $formSuccess = false;
