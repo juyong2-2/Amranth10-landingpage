@@ -6,16 +6,16 @@ function q(string $key): string {
   return is_string($v) ? $v : '';
 }
 
-$contactEmail = 'iyjy@duzon119.co.kr';
+$config = require __DIR__ . '/config.php';
+$contactEmail = $config['admin_email'];
+$mailFrom = $config['mail_from'];
 $formErrors = [];
 $formSuccess = false;
-$smtpHost = getenv('SMTP_HOST') ?: '';
-$smtpPort = (int) (getenv('SMTP_PORT') ?: 587);
-$smtpUser = getenv('SMTP_USER') ?: '';
-$smtpPass = getenv('SMTP_PASS') ?: '';
-$smtpSecure = strtolower(getenv('SMTP_SECURE') ?: 'tls');
-$smtpFrom = getenv('SMTP_FROM') ?: '';
-$smtpFromName = getenv('SMTP_FROM_NAME') ?: 'Amaranth10 Landing';
+$dbHost = $config['db_host'];
+$dbUser = $config['db_user'];
+$dbPass = $config['db_pass'];
+$dbName = $config['db_name'];
+$dbPort = $config['db_port'];
 
 $utm = [
   'utm_source'   => q('utm_source'),
@@ -36,110 +36,56 @@ $postArray = static function (string $key): array {
   return is_array($value) ? array_map('trim', array_map('strval', $value)) : [];
 };
 
-$smtpSend = static function (
+$dbInsert = static function (
   string $host,
   int $port,
   string $user,
   string $pass,
-  string $secure,
-  string $from,
-  string $fromName,
-  string $to,
-  string $subject,
-  string $body
+  string $name,
+  array $payload
 ): bool {
-  if ($host === '' || $from === '') {
+  if (!class_exists('mysqli')) {
+    return false;
+  }
+  $connection = new mysqli($host, $user, $pass, $name, $port);
+  if ($connection->connect_errno) {
+    return false;
+  }
+  $connection->set_charset('utf8mb4');
+
+  $sql = 'INSERT INTO contact_inquiries
+    (company, bizno, name, phone, email, message, modules, budget_nonprofit, prod_outsource, prod_cost, utm_source, utm_medium, utm_campaign, utm_content, utm_term, ref)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+  $statement = $connection->prepare($sql);
+  if (!$statement) {
+    $connection->close();
     return false;
   }
 
-  $socket = @fsockopen($host, $port, $errno, $errstr, 10);
-  if (!$socket) {
-    return false;
-  }
+  $statement->bind_param(
+    'ssssssssssssssss',
+    $payload['company'],
+    $payload['bizno'],
+    $payload['name'],
+    $payload['phone'],
+    $payload['email'],
+    $payload['message'],
+    $payload['modules'],
+    $payload['budget_nonprofit'],
+    $payload['prod_outsource'],
+    $payload['prod_cost'],
+    $payload['utm_source'],
+    $payload['utm_medium'],
+    $payload['utm_campaign'],
+    $payload['utm_content'],
+    $payload['utm_term'],
+    $payload['ref']
+  );
 
-  $read = static function () use ($socket): string {
-    $data = '';
-    while (!feof($socket)) {
-      $line = fgets($socket, 515);
-      if ($line === false) {
-        break;
-      }
-      $data .= $line;
-      if (preg_match('/^\d{3} /', $line)) {
-        break;
-      }
-    }
-    return $data;
-  };
-
-  $write = static function (string $command) use ($socket): void {
-    fwrite($socket, $command . "\r\n");
-  };
-
-  $read();
-  $write('EHLO localhost');
-  $read();
-
-  if ($secure === 'tls') {
-    $write('STARTTLS');
-    $response = $read();
-    if (substr($response, 0, 3) !== '220') {
-      fclose($socket);
-      return false;
-    }
-    if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
-      fclose($socket);
-      return false;
-    }
-    $write('EHLO localhost');
-    $read();
-  }
-
-  if ($user !== '' && $pass !== '') {
-    $write('AUTH LOGIN');
-    $read();
-    $write(base64_encode($user));
-    $read();
-    $write(base64_encode($pass));
-    $authResponse = $read();
-    if (substr($authResponse, 0, 3) !== '235') {
-      fclose($socket);
-      return false;
-    }
-  }
-
-  $write('MAIL FROM:<' . $from . '>');
-  if (substr($read(), 0, 3) !== '250') {
-    fclose($socket);
-    return false;
-  }
-  $write('RCPT TO:<' . $to . '>');
-  if (substr($read(), 0, 3) !== '250') {
-    fclose($socket);
-    return false;
-  }
-  $write('DATA');
-  if (substr($read(), 0, 3) !== '354') {
-    fclose($socket);
-    return false;
-  }
-
-  $encodedSubject = function_exists('mb_encode_mimeheader')
-    ? mb_encode_mimeheader($subject, 'UTF-8')
-    : '=?UTF-8?B?' . base64_encode($subject) . '?=';
-  $headers = [
-    'From: ' . $fromName . ' <' . $from . '>',
-    'To: <' . $to . '>',
-    'Subject: ' . $encodedSubject,
-    'Content-Type: text/plain; charset=UTF-8',
-  ];
-  $message = implode("\r\n", $headers) . "\r\n\r\n" . $body . "\r\n.";
-  $write($message);
-  $response = $read();
-  $write('QUIT');
-  fclose($socket);
-
-  return substr($response, 0, 3) === '250';
+  $result = $statement->execute();
+  $statement->close();
+  $connection->close();
+  return $result;
 };
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -187,32 +133,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $emailBody = implode("\n", $emailBodyLines);
-    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $fromAddress = $smtpFrom !== '' ? $smtpFrom : 'no-reply@' . $host;
-    if ($smtpHost !== '') {
-      $mailSent = $smtpSend(
-        $smtpHost,
-        $smtpPort,
-        $smtpUser,
-        $smtpPass,
-        $smtpSecure,
-        $fromAddress,
-        $smtpFromName,
-        $contactEmail,
-        $subject,
-        $emailBody
-      );
-    } else {
-      $headers = [
-        'From: ' . $smtpFromName . ' <' . $fromAddress . '>',
-        'Reply-To: ' . $email,
-        'Content-Type: text/plain; charset=UTF-8',
-      ];
-      $encodedSubject = function_exists('mb_encode_mimeheader')
-        ? mb_encode_mimeheader($subject, 'UTF-8')
-        : '=?UTF-8?B?' . base64_encode($subject) . '?=';
-      $mailSent = mail($contactEmail, $encodedSubject, $emailBody, implode("\r\n", $headers));
+    $dbPayload = [
+      'company' => $company,
+      'bizno' => $bizno,
+      'name' => $name,
+      'phone' => $phone,
+      'email' => $email,
+      'message' => $message,
+      'modules' => $modules !== [] ? implode(', ', $modules) : '',
+      'budget_nonprofit' => $budgetNonprofit,
+      'prod_outsource' => $prodOutsource,
+      'prod_cost' => $prodCost,
+      'utm_source' => $utm['utm_source'],
+      'utm_medium' => $utm['utm_medium'],
+      'utm_campaign' => $utm['utm_campaign'],
+      'utm_content' => $utm['utm_content'],
+      'utm_term' => $utm['utm_term'],
+      'ref' => $utm['ref'],
+    ];
+
+    $dbSaved = $dbInsert($dbHost, $dbPort, $dbUser, $dbPass, $dbName, $dbPayload);
+    if (!$dbSaved) {
+      $formErrors[] = '문의 저장에 실패했습니다. 관리자에게 문의해주세요.';
     }
+
+    $headers = [
+      'From: ' . $mailFrom,
+      'Reply-To: ' . $email,
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=UTF-8',
+    ];
+    $encodedSubject = function_exists('mb_encode_mimeheader')
+      ? mb_encode_mimeheader($subject, 'UTF-8')
+      : $subject;
+    $mailSent = $dbSaved
+      ? mail($contactEmail, $encodedSubject, $emailBody, implode("\r\n", $headers))
+      : false;
     if ($mailSent) {
       $formSuccess = true;
     } else {
