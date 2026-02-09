@@ -8,8 +8,21 @@ function q(string $key): string {
 
 $contactEmail = 'iyjy@duzon119.co.kr';
 $smsRecipient = '01055950680';
+$smsApiUrl = getenv('SMS_API_URL') ?: '';
+$smsApiKey = getenv('SMS_API_KEY') ?: '';
+$smsSender = getenv('SMS_API_SENDER') ?: '';
+$smsGatewayEmail = getenv('SMS_EMAIL_GATEWAY') ?: '';
 $formErrors = [];
 $formSuccess = false;
+
+$utm = [
+  'utm_source'   => q('utm_source'),
+  'utm_medium'   => q('utm_medium'),
+  'utm_campaign' => q('utm_campaign'),
+  'utm_content'  => q('utm_content'),
+  'utm_term'     => q('utm_term'),
+  'ref'          => q('ref'),
+];
 
 $postValue = static function (string $key): string {
   $value = filter_input(INPUT_POST, $key, FILTER_SANITIZE_FULL_SPECIAL_CHARS);
@@ -21,12 +34,22 @@ $postArray = static function (string $key): array {
   return is_array($value) ? array_map('trim', array_map('strval', $value)) : [];
 };
 
-$sendSms = static function (string $recipient, string $message): bool {
-  $apiUrl = getenv('SMS_API_URL') ?: '';
-  $apiKey = getenv('SMS_API_KEY') ?: '';
-  $sender = getenv('SMS_API_SENDER') ?: '';
-
+$sendSms = static function (
+  string $recipient,
+  string $message,
+  string $apiUrl,
+  string $apiKey,
+  string $sender,
+  string $gatewayEmail
+): bool {
   if ($apiUrl === '' || $apiKey === '' || $sender === '') {
+    if ($gatewayEmail !== '') {
+      $headers = [
+        'From: Amaranth10 Landing <no-reply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '>',
+        'Content-Type: text/plain; charset=UTF-8',
+      ];
+      return mail($gatewayEmail, '', $message, implode("\r\n", $headers));
+    }
     return false;
   }
 
@@ -37,6 +60,10 @@ $sendSms = static function (string $recipient, string $message): bool {
   ], JSON_UNESCAPED_UNICODE);
 
   if ($payload === false) {
+    return false;
+  }
+
+  if (!function_exists('curl_init')) {
     return false;
   }
 
@@ -112,9 +139,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       'Content-Type: text/plain; charset=UTF-8',
     ];
 
-    $mailSent = mail($contactEmail, mb_encode_mimeheader($subject, 'UTF-8'), $emailBody, implode("\r\n", $headers));
+    $encodedSubject = function_exists('mb_encode_mimeheader')
+      ? mb_encode_mimeheader($subject, 'UTF-8')
+      : '=?UTF-8?B?' . base64_encode($subject) . '?=';
+    $mailSent = mail($contactEmail, $encodedSubject, $emailBody, implode("\r\n", $headers));
     $smsMessage = "[Amaranth10 상담]\n{$company} / {$name}\n{$phone}\n{$message}";
-    $smsSent = $sendSms($smsRecipient, $smsMessage);
+    $smsSent = $sendSms($smsRecipient, $smsMessage, $smsApiUrl, $smsApiKey, $smsSender, $smsGatewayEmail);
 
     if ($mailSent && $smsSent) {
       $formSuccess = true;
@@ -128,15 +158,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
   }
 }
-
-$utm = [
-  'utm_source'   => q('utm_source'),
-  'utm_medium'   => q('utm_medium'),
-  'utm_campaign' => q('utm_campaign'),
-  'utm_content'  => q('utm_content'),
-  'utm_term'     => q('utm_term'),
-  'ref'          => q('ref'),
-];
 ?>
 <!doctype html>
 <html lang="ko">
