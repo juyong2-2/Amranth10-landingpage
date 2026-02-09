@@ -9,6 +9,13 @@ function q(string $key): string {
 $contactEmail = 'iyjy@duzon119.co.kr';
 $formErrors = [];
 $formSuccess = false;
+$smtpHost = getenv('SMTP_HOST') ?: '';
+$smtpPort = (int) (getenv('SMTP_PORT') ?: 587);
+$smtpUser = getenv('SMTP_USER') ?: '';
+$smtpPass = getenv('SMTP_PASS') ?: '';
+$smtpSecure = strtolower(getenv('SMTP_SECURE') ?: 'tls');
+$smtpFrom = getenv('SMTP_FROM') ?: '';
+$smtpFromName = getenv('SMTP_FROM_NAME') ?: 'Amaranth10 Landing';
 
 $utm = [
   'utm_source'   => q('utm_source'),
@@ -27,6 +34,112 @@ $postValue = static function (string $key): string {
 $postArray = static function (string $key): array {
   $value = filter_input(INPUT_POST, $key, FILTER_DEFAULT, FILTER_REQUIRE_ARRAY);
   return is_array($value) ? array_map('trim', array_map('strval', $value)) : [];
+};
+
+$smtpSend = static function (
+  string $host,
+  int $port,
+  string $user,
+  string $pass,
+  string $secure,
+  string $from,
+  string $fromName,
+  string $to,
+  string $subject,
+  string $body
+): bool {
+  if ($host === '' || $from === '') {
+    return false;
+  }
+
+  $socket = @fsockopen($host, $port, $errno, $errstr, 10);
+  if (!$socket) {
+    return false;
+  }
+
+  $read = static function () use ($socket): string {
+    $data = '';
+    while (!feof($socket)) {
+      $line = fgets($socket, 515);
+      if ($line === false) {
+        break;
+      }
+      $data .= $line;
+      if (preg_match('/^\d{3} /', $line)) {
+        break;
+      }
+    }
+    return $data;
+  };
+
+  $write = static function (string $command) use ($socket): void {
+    fwrite($socket, $command . "\r\n");
+  };
+
+  $read();
+  $write('EHLO localhost');
+  $read();
+
+  if ($secure === 'tls') {
+    $write('STARTTLS');
+    $response = $read();
+    if (substr($response, 0, 3) !== '220') {
+      fclose($socket);
+      return false;
+    }
+    if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+      fclose($socket);
+      return false;
+    }
+    $write('EHLO localhost');
+    $read();
+  }
+
+  if ($user !== '' && $pass !== '') {
+    $write('AUTH LOGIN');
+    $read();
+    $write(base64_encode($user));
+    $read();
+    $write(base64_encode($pass));
+    $authResponse = $read();
+    if (substr($authResponse, 0, 3) !== '235') {
+      fclose($socket);
+      return false;
+    }
+  }
+
+  $write('MAIL FROM:<' . $from . '>');
+  if (substr($read(), 0, 3) !== '250') {
+    fclose($socket);
+    return false;
+  }
+  $write('RCPT TO:<' . $to . '>');
+  if (substr($read(), 0, 3) !== '250') {
+    fclose($socket);
+    return false;
+  }
+  $write('DATA');
+  if (substr($read(), 0, 3) !== '354') {
+    fclose($socket);
+    return false;
+  }
+
+  $encodedSubject = function_exists('mb_encode_mimeheader')
+    ? mb_encode_mimeheader($subject, 'UTF-8')
+    : '=?UTF-8?B?' . base64_encode($subject) . '?=';
+  $headers = [
+    'From: ' . $fromName . ' <' . $from . '>',
+    'To: <' . $to . '>',
+    'Subject: ' . $encodedSubject,
+    'Content-Type: text/plain; charset=UTF-8',
+  ];
+  $message = implode("\r\n", $headers) . "\r\n\r\n" . $body . "\r\n.";
+  $write($message);
+  $response = $read();
+  $write('QUIT');
+  fclose($socket);
+
+  return substr($response, 0, 3) === '250';
 };
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -75,16 +188,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $emailBody = implode("\n", $emailBodyLines);
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $headers = [
-      'From: Amaranth10 Landing <no-reply@' . $host . '>',
-      'Reply-To: ' . $email,
-      'Content-Type: text/plain; charset=UTF-8',
-    ];
-
-    $encodedSubject = function_exists('mb_encode_mimeheader')
-      ? mb_encode_mimeheader($subject, 'UTF-8')
-      : '=?UTF-8?B?' . base64_encode($subject) . '?=';
-    $mailSent = mail($contactEmail, $encodedSubject, $emailBody, implode("\r\n", $headers));
+    $fromAddress = $smtpFrom !== '' ? $smtpFrom : 'no-reply@' . $host;
+    if ($smtpHost !== '') {
+      $mailSent = $smtpSend(
+        $smtpHost,
+        $smtpPort,
+        $smtpUser,
+        $smtpPass,
+        $smtpSecure,
+        $fromAddress,
+        $smtpFromName,
+        $contactEmail,
+        $subject,
+        $emailBody
+      );
+    } else {
+      $headers = [
+        'From: ' . $smtpFromName . ' <' . $fromAddress . '>',
+        'Reply-To: ' . $email,
+        'Content-Type: text/plain; charset=UTF-8',
+      ];
+      $encodedSubject = function_exists('mb_encode_mimeheader')
+        ? mb_encode_mimeheader($subject, 'UTF-8')
+        : '=?UTF-8?B?' . base64_encode($subject) . '?=';
+      $mailSent = mail($contactEmail, $encodedSubject, $emailBody, implode("\r\n", $headers));
+    }
     if ($mailSent) {
       $formSuccess = true;
     } else {
