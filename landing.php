@@ -66,6 +66,31 @@ $dbInsert = static function (
     }
     $connection->set_charset('utf8mb4');
 
+    $tableSql = 'CREATE TABLE IF NOT EXISTS contact_inquiries (
+      id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      company VARCHAR(255) NOT NULL,
+      bizno VARCHAR(50) NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      phone VARCHAR(50) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      message TEXT NOT NULL,
+      modules VARCHAR(255) NOT NULL,
+      budget_nonprofit VARCHAR(10) NOT NULL,
+      prod_outsource VARCHAR(10) NOT NULL,
+      prod_cost VARCHAR(10) NOT NULL,
+      utm_source VARCHAR(255) NOT NULL,
+      utm_medium VARCHAR(255) NOT NULL,
+      utm_campaign VARCHAR(255) NOT NULL,
+      utm_content VARCHAR(255) NOT NULL,
+      utm_term VARCHAR(255) NOT NULL,
+      ref VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+    if (!$connection->query($tableSql)) {
+      $connection->close();
+      return false;
+    }
+
     $sql = 'INSERT INTO contact_inquiries
       (company, bizno, name, phone, email, message, modules, budget_nonprofit, prod_outsource, prod_cost, utm_source, utm_medium, utm_campaign, utm_content, utm_term, ref)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
