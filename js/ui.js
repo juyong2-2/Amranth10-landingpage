@@ -154,9 +154,54 @@
   // -----------------------------
   const biznoInput = $("#bizno");
   const submitOverlay = $("#submitOverlay");
-  const submitPopup = $("#submitPopup");
-  const popupClose = $("[data-popup-close]");
+  let submitPopup = $("#submitPopup");
+  let popupClose = $("[data-popup-close]");
   const form = $(".form");
+  const popupStorageKey = "contactInquiryPending";
+
+  function ensurePopup() {
+    if (submitPopup) return submitPopup;
+    const popup = document.createElement("div");
+    popup.className = "submitPopup";
+    popup.id = "submitPopup";
+    popup.setAttribute("aria-hidden", "true");
+    popup.innerHTML = `
+      <div class="submitPopup__card" role="status" aria-live="polite">
+        <div class="submitPopup__icon" aria-hidden="true">✓</div>
+        <div class="submitPopup__title">접수완료!</div>
+        <div class="submitPopup__desc">요청이 정상적으로 접수되었습니다.</div>
+        <button class="btn btn--primary btn--sm submitPopup__btn" type="button" data-popup-close>확인</button>
+      </div>
+    `;
+    document.body.appendChild(popup);
+    submitPopup = popup;
+    popupClose = submitPopup.querySelector("[data-popup-close]");
+    return submitPopup;
+  }
+
+  function markPopupPending() {
+    try {
+      localStorage.setItem(popupStorageKey, String(Date.now()));
+    } catch (error) {
+      // ignore storage errors
+    }
+  }
+
+  function clearPopupPending() {
+    try {
+      localStorage.removeItem(popupStorageKey);
+    } catch (error) {
+      // ignore storage errors
+    }
+  }
+
+  function isPopupPending() {
+    try {
+      return Boolean(localStorage.getItem(popupStorageKey));
+    } catch (error) {
+      return false;
+    }
+  }
 
   function formatBizno(value) {
     const digits = value.replace(/[^\d]/g, "").slice(0, 10);
@@ -187,24 +232,38 @@
   }
 
   function showPopup() {
+    ensurePopup();
     if (!submitPopup) return;
     submitPopup.classList.add("is-visible");
+    submitPopup.classList.remove("is-animated");
+    requestAnimationFrame(() => {
+      submitPopup.classList.add("is-animated");
+    });
     submitPopup.setAttribute("aria-hidden", "false");
   }
 
   function hidePopup() {
     if (!submitPopup) return;
     submitPopup.classList.remove("is-visible");
+    submitPopup.classList.remove("is-animated");
     submitPopup.setAttribute("aria-hidden", "true");
+    clearPopupPending();
   }
 
   const successFlag = document.body?.dataset?.formSuccess === "true";
   if (successFlag) {
+    markPopupPending();
+    showPopup();
+  } else if (isPopupPending()) {
     showPopup();
   }
 
-  popupClose?.addEventListener("click", hidePopup);
-  submitPopup?.addEventListener("click", (e) => {
-    if (e.target === submitPopup) hidePopup();
-  });
+  if (popupClose) {
+    popupClose.addEventListener("click", hidePopup);
+  }
+  if (submitPopup) {
+    submitPopup.addEventListener("click", (e) => {
+      if (e.target === submitPopup) hidePopup();
+    });
+  }
 })();

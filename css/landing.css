@@ -474,6 +474,9 @@ body.drawer-open .backdrop{opacity: 1; pointer-events: auto}
   transform: translateY(0) scale(1);
   opacity: 1;
 }
+.submitPopup.is-animated .submitPopup__card{
+  animation: popupIn .45s var(--ease);
+}
 .submitPopup__icon{
   width: 46px;
   height: 46px;
@@ -550,8 +553,15 @@ body.drawer-open .backdrop{opacity: 1; pointer-events: auto}
   .hero__hintLine::after{animation:none; opacity:.6; top:20%; transform:none}
   [data-reveal]{transition:none !important; filter:none !important; opacity:1 !important; transform:none !important}
   .header, .stage, .drawer, .backdrop, .btn{transition:none !important}
+  .submitPopup__card{animation:none !important}
 }
 
 @keyframes spin{
   to{transform: rotate(360deg)}
+}
+
+@keyframes popupIn{
+  0%{transform: translateY(22px) scale(.9); opacity: 0}
+  60%{transform: translateY(-4px) scale(1.02); opacity: 1}
+  100%{transform: translateY(0) scale(1); opacity: 1}
 }
