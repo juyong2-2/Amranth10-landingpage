@@ -422,6 +422,85 @@ body.drawer-open .backdrop{opacity: 1; pointer-events: auto}
   background: rgba(230,62,62,.12);
   color: #7a0b0b;
 }
+.submitOverlay,
+.submitPopup{
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8,12,20,.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .28s ease;
+  z-index: 200;
+}
+.submitOverlay.is-visible,
+.submitPopup.is-visible{
+  opacity: 1;
+  pointer-events: auto;
+}
+.submitOverlay__card{
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(0,0,0,.18);
+  font-weight: 800;
+  font-size: 14px;
+}
+.submitOverlay__spinner{
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid rgba(10,98,255,.2);
+  border-top-color: rgba(10,98,255,.95);
+  animation: spin 1s linear infinite;
+}
+.submitPopup__card{
+  width: min(320px, 90vw);
+  border-radius: 20px;
+  background: #fff;
+  padding: 22px 20px 18px;
+  text-align: center;
+  box-shadow: 0 24px 80px rgba(0,0,0,.22);
+  transform: translateY(16px) scale(.96);
+  opacity: 0;
+  transition: transform .35s var(--ease), opacity .35s ease;
+}
+.submitPopup.is-visible .submitPopup__card{
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+.submitPopup__icon{
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: rgba(10,98,255,.12);
+  color: #0a62ff;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  font-weight: 900;
+}
+.submitPopup__title{
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.2px;
+}
+.submitPopup__desc{
+  margin-top: 6px;
+  font-size: 13px;
+  color: rgba(17,17,17,.6);
+  font-weight: 650;
+}
+.submitPopup__btn{
+  margin-top: 14px;
+  width: 100%;
+}
 .field{display:flex; flex-direction:column; gap:8px; margin-bottom: 12px}
 .field label{font-size: 13px; font-weight: 800; color: rgba(17,17,17,.72)}
 .field input, .field textarea{
@@ -471,4 +550,8 @@ body.drawer-open .backdrop{opacity: 1; pointer-events: auto}
   .hero__hintLine::after{animation:none; opacity:.6; top:20%; transform:none}
   [data-reveal]{transition:none !important; filter:none !important; opacity:1 !important; transform:none !important}
   .header, .stage, .drawer, .backdrop, .btn{transition:none !important}
+}
+
+@keyframes spin{
+  to{transform: rotate(360deg)}
 }

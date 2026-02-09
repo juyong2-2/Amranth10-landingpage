@@ -151,6 +151,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
     $formErrors[] = '이메일 형식이 올바르지 않습니다.';
   }
+  if ($bizno !== '' && !preg_match('/^\d{3}-\d{2}-\d{5}$/', $bizno)) {
+    $formErrors[] = '사업자번호 형식이 올바르지 않습니다.';
+  }
 
   if ($formErrors === []) {
     $subject = 'Amaranth 10 도입 상담 요청 - ' . $company;
@@ -238,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link rel="stylesheet" href="/contact/css/landing.css?v=120" />
 </head>
 
-<body>
+  <body data-form-success="<?= $formSuccess ? 'true' : 'false' ?>">
   <a class="skip" href="#content">본문 바로가기</a>
 
   <!-- Header: 스크롤 전 숨김, 스크롤하면 등장 -->
@@ -453,9 +456,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <div class="drawer__body">
-      <?php if ($formSuccess): ?>
-        <div class="formNotice">요청이 정상적으로 접수되었습니다. 빠르게 연락드리겠습니다.</div>
-      <?php elseif ($formErrors !== []): ?>
+      <?php if ($formErrors !== []): ?>
         <div class="formNotice formNotice--error">
           <?= htmlspecialchars(implode("\n", $formErrors), ENT_QUOTES, 'UTF-8') ?>
         </div>
@@ -474,6 +475,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="field">
           <label for="bizno">사업자번호 *</label>
           <input id="bizno" name="bizno" type="text" inputmode="numeric" autocomplete="off" required
+                 pattern="\\d{3}-\\d{2}-\\d{5}" maxlength="12"
                  placeholder="예: 123-45-67890" />
           <p class="hint">하이픈(-) 포함/미포함 모두 가능합니다.</p>
         </div>
@@ -571,6 +573,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </aside>
 
   <div class="backdrop" data-drawer-close aria-hidden="true"></div>
+  <div class="submitOverlay" id="submitOverlay" aria-hidden="true">
+    <div class="submitOverlay__card" role="status" aria-live="polite">
+      <div class="submitOverlay__spinner" aria-hidden="true"></div>
+      <div class="submitOverlay__text">접수중...</div>
+    </div>
+  </div>
+  <div class="submitPopup" id="submitPopup" aria-hidden="true">
+    <div class="submitPopup__card" role="status" aria-live="polite">
+      <div class="submitPopup__icon" aria-hidden="true">✓</div>
+      <div class="submitPopup__title">접수완료!</div>
+      <div class="submitPopup__desc">요청이 정상적으로 접수되었습니다.</div>
+      <button class="btn btn--primary btn--sm submitPopup__btn" type="button" data-popup-close>확인</button>
+    </div>
+  </div>
 
   <script src="/contact/js/ui.js?v=120" defer></script>
 </body>
