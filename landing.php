@@ -7,11 +7,6 @@ function q(string $key): string {
 }
 
 $contactEmail = 'iyjy@duzon119.co.kr';
-$smsRecipient = '01055950680';
-$smsApiUrl = getenv('SMS_API_URL') ?: '';
-$smsApiKey = getenv('SMS_API_KEY') ?: '';
-$smsSender = getenv('SMS_API_SENDER') ?: '';
-$smsGatewayEmail = getenv('SMS_EMAIL_GATEWAY') ?: '';
 $formErrors = [];
 $formSuccess = false;
 
@@ -32,59 +27,6 @@ $postValue = static function (string $key): string {
 $postArray = static function (string $key): array {
   $value = filter_input(INPUT_POST, $key, FILTER_DEFAULT, FILTER_REQUIRE_ARRAY);
   return is_array($value) ? array_map('trim', array_map('strval', $value)) : [];
-};
-
-$sendSms = static function (
-  string $recipient,
-  string $message,
-  string $apiUrl,
-  string $apiKey,
-  string $sender,
-  string $gatewayEmail
-): bool {
-  if ($apiUrl === '' || $apiKey === '' || $sender === '') {
-    if ($gatewayEmail !== '') {
-      $headers = [
-        'From: Amaranth10 Landing <no-reply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '>',
-        'Content-Type: text/plain; charset=UTF-8',
-      ];
-      return mail($gatewayEmail, '', $message, implode("\r\n", $headers));
-    }
-    return false;
-  }
-
-  $payload = json_encode([
-    'to' => $recipient,
-    'from' => $sender,
-    'message' => $message,
-  ], JSON_UNESCAPED_UNICODE);
-
-  if ($payload === false) {
-    return false;
-  }
-
-  if (!function_exists('curl_init')) {
-    return false;
-  }
-
-  $ch = curl_init($apiUrl);
-  if ($ch === false) {
-    return false;
-  }
-
-  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-  curl_setopt($ch, CURLOPT_POST, true);
-  curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'Content-Type: application/json',
-    'Authorization: Bearer ' . $apiKey,
-  ]);
-  curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-
-  $response = curl_exec($ch);
-  $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-  curl_close($ch);
-
-  return $response !== false && $status >= 200 && $status < 300;
 };
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -143,17 +85,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       ? mb_encode_mimeheader($subject, 'UTF-8')
       : '=?UTF-8?B?' . base64_encode($subject) . '?=';
     $mailSent = mail($contactEmail, $encodedSubject, $emailBody, implode("\r\n", $headers));
-    $smsMessage = "[Amaranth10 상담]\n{$company} / {$name}\n{$phone}\n{$message}";
-    $smsSent = $sendSms($smsRecipient, $smsMessage, $smsApiUrl, $smsApiKey, $smsSender, $smsGatewayEmail);
-
-    if ($mailSent && $smsSent) {
+    if ($mailSent) {
       $formSuccess = true;
     } else {
       if (!$mailSent) {
         $formErrors[] = '이메일 전송에 실패했습니다. 잠시 후 다시 시도해주세요.';
-      }
-      if (!$smsSent) {
-        $formErrors[] = '문자 알림 전송에 실패했습니다. 관리자에게 문의해주세요.';
       }
     }
   }
