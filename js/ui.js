@@ -148,4 +148,63 @@
 
   // init
   toggleFollow();
+
+  // -----------------------------
+  // 5) Bizno formatting + submit feedback
+  // -----------------------------
+  const biznoInput = $("#bizno");
+  const submitOverlay = $("#submitOverlay");
+  const submitPopup = $("#submitPopup");
+  const popupClose = $("[data-popup-close]");
+  const form = $(".form");
+
+  function formatBizno(value) {
+    const digits = value.replace(/[^\d]/g, "").slice(0, 10);
+    const parts = [];
+    if (digits.length > 0) parts.push(digits.slice(0, 3));
+    if (digits.length > 3) parts.push(digits.slice(3, 5));
+    if (digits.length > 5) parts.push(digits.slice(5, 10));
+    return parts.join("-");
+  }
+
+  if (biznoInput) {
+    const applyBizno = () => {
+      const next = formatBizno(biznoInput.value);
+      biznoInput.value = next;
+      const end = next.length;
+      biznoInput.setSelectionRange(end, end);
+    };
+    biznoInput.addEventListener("input", applyBizno);
+    biznoInput.addEventListener("blur", applyBizno);
+    biznoInput.addEventListener("paste", applyBizno);
+  }
+
+  if (form && submitOverlay) {
+    form.addEventListener("submit", () => {
+      submitOverlay.classList.add("is-visible");
+      submitOverlay.setAttribute("aria-hidden", "false");
+    });
+  }
+
+  function showPopup() {
+    if (!submitPopup) return;
+    submitPopup.classList.add("is-visible");
+    submitPopup.setAttribute("aria-hidden", "false");
+  }
+
+  function hidePopup() {
+    if (!submitPopup) return;
+    submitPopup.classList.remove("is-visible");
+    submitPopup.setAttribute("aria-hidden", "true");
+  }
+
+  const successFlag = document.body?.dataset?.formSuccess === "true";
+  if (successFlag) {
+    showPopup();
+  }
+
+  popupClose?.addEventListener("click", hidePopup);
+  submitPopup?.addEventListener("click", (e) => {
+    if (e.target === submitPopup) hidePopup();
+  });
 })();

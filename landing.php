@@ -6,6 +6,32 @@ function q(string $key): string {
   return is_string($v) ? $v : '';
 }
 
+$defaultConfig = [
+  'db_host' => 'localhost',
+  'db_user' => 'root',
+  'db_pass' => '',
+  'db_name' => 'amaranth10',
+  'db_port' => 3306,
+  'admin_email' => 'iyjy@duzon119.co.kr',
+  'mail_from' => 'no-reply@localhost',
+];
+$configFile = __DIR__ . '/config.php';
+$config = is_file($configFile) ? require $configFile : [];
+$config = array_merge($defaultConfig, is_array($config) ? $config : []);
+$contactEmailConfig = $config['admin_email'];
+$contactEmails = is_array($contactEmailConfig)
+  ? $contactEmailConfig
+  : array_filter(array_map('trim', explode(',', (string) $contactEmailConfig)));
+$contactEmail = $contactEmails !== [] ? implode(', ', $contactEmails) : '';
+$mailFrom = $config['mail_from'];
+$formErrors = [];
+$formSuccess = false;
+$dbHost = $config['db_host'];
+$dbUser = $config['db_user'];
+$dbPass = $config['db_pass'];
+$dbName = $config['db_name'];
+$dbPort = $config['db_port'];
+
 $utm = [
   'utm_source'   => q('utm_source'),
   'utm_medium'   => q('utm_medium'),
@@ -14,6 +40,195 @@ $utm = [
   'utm_term'     => q('utm_term'),
   'ref'          => q('ref'),
 ];
+
+$postValue = static function (string $key): string {
+  $value = filter_input(INPUT_POST, $key, FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+  return is_string($value) ? trim($value) : '';
+};
+
+$postArray = static function (string $key): array {
+  $value = filter_input(INPUT_POST, $key, FILTER_DEFAULT, FILTER_REQUIRE_ARRAY);
+  return is_array($value) ? array_map('trim', array_map('strval', $value)) : [];
+};
+
+$dbInsert = static function (
+  string $host,
+  int $port,
+  string $user,
+  string $pass,
+  string $name,
+  array $payload
+): bool {
+  if (!class_exists('mysqli')) {
+    return false;
+  }
+  mysqli_report(MYSQLI_REPORT_OFF);
+  try {
+    $connection = new mysqli($host, $user, $pass, $name, $port);
+    if ($connection->connect_errno) {
+      return false;
+    }
+    $connection->set_charset('utf8mb4');
+
+    $tableSql = 'CREATE TABLE IF NOT EXISTS contact_inquiries (
+      id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      company VARCHAR(255) NOT NULL,
+      bizno VARCHAR(50) NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      phone VARCHAR(50) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      message TEXT NOT NULL,
+      modules VARCHAR(255) NOT NULL,
+      budget_nonprofit VARCHAR(10) NOT NULL,
+      prod_outsource VARCHAR(10) NOT NULL,
+      prod_cost VARCHAR(10) NOT NULL,
+      utm_source VARCHAR(255) NOT NULL,
+      utm_medium VARCHAR(255) NOT NULL,
+      utm_campaign VARCHAR(255) NOT NULL,
+      utm_content VARCHAR(255) NOT NULL,
+      utm_term VARCHAR(255) NOT NULL,
+      ref VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+    if (!$connection->query($tableSql)) {
+      $connection->close();
+      return false;
+    }
+
+    $sql = 'INSERT INTO contact_inquiries
+      (company, bizno, name, phone, email, message, modules, budget_nonprofit, prod_outsource, prod_cost, utm_source, utm_medium, utm_campaign, utm_content, utm_term, ref)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+    $statement = $connection->prepare($sql);
+    if (!$statement) {
+      $connection->close();
+      return false;
+    }
+
+    $statement->bind_param(
+      'ssssssssssssssss',
+      $payload['company'],
+      $payload['bizno'],
+      $payload['name'],
+      $payload['phone'],
+      $payload['email'],
+      $payload['message'],
+      $payload['modules'],
+      $payload['budget_nonprofit'],
+      $payload['prod_outsource'],
+      $payload['prod_cost'],
+      $payload['utm_source'],
+      $payload['utm_medium'],
+      $payload['utm_campaign'],
+      $payload['utm_content'],
+      $payload['utm_term'],
+      $payload['ref']
+    );
+
+    $result = $statement->execute();
+    $statement->close();
+    $connection->close();
+    return $result;
+  } catch (Throwable $error) {
+    if (isset($connection) && $connection instanceof mysqli) {
+      $connection->close();
+    }
+    return false;
+  }
+};
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  $company = $postValue('company');
+  $bizno = $postValue('bizno');
+  $name = $postValue('name');
+  $phone = $postValue('phone');
+  $email = $postValue('email');
+  $message = $postValue('message');
+  $modules = $postArray('modules');
+  $budgetNonprofit = $postValue('budget_nonprofit');
+  $prodOutsource = $postValue('prod_outsource');
+  $prodCost = $postValue('prod_cost');
+
+  if ($company === '' || $bizno === '' || $name === '' || $phone === '' || $email === '' || $message === '') {
+    $formErrors[] = '필수 항목을 모두 입력해주세요.';
+  }
+
+  if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    $formErrors[] = '이메일 형식이 올바르지 않습니다.';
+  }
+  if ($bizno !== '' && !preg_match('/^\d{3}-\d{2}-\d{5}$/', $bizno)) {
+    $formErrors[] = '사업자번호 형식이 올바르지 않습니다.';
+  }
+
+  if ($formErrors === []) {
+    $subject = 'Amaranth 10 도입 상담 요청 - ' . $company;
+    $emailBodyLines = [
+      "회사명: {$company}",
+      "사업자번호: {$bizno}",
+      "담당자: {$name}",
+      "연락처: {$phone}",
+      "이메일: {$email}",
+      "모듈: " . ($modules !== [] ? implode(', ', $modules) : '미선택'),
+      "예산 모듈 비영리 여부: " . ($budgetNonprofit !== '' ? $budgetNonprofit : '미응답'),
+      "생산 모듈 외주 사용: " . ($prodOutsource !== '' ? $prodOutsource : '미응답'),
+      "생산 모듈 원가 사용: " . ($prodCost !== '' ? $prodCost : '미응답'),
+      "문의내용:",
+      $message,
+      '',
+      'UTM 정보:',
+    ];
+
+    foreach ($utm as $key => $value) {
+      if ($value !== '') {
+        $emailBodyLines[] = "{$key}: {$value}";
+      }
+    }
+
+    $emailBody = implode("\n", $emailBodyLines);
+    $dbPayload = [
+      'company' => $company,
+      'bizno' => $bizno,
+      'name' => $name,
+      'phone' => $phone,
+      'email' => $email,
+      'message' => $message,
+      'modules' => $modules !== [] ? implode(', ', $modules) : '',
+      'budget_nonprofit' => $budgetNonprofit,
+      'prod_outsource' => $prodOutsource,
+      'prod_cost' => $prodCost,
+      'utm_source' => $utm['utm_source'],
+      'utm_medium' => $utm['utm_medium'],
+      'utm_campaign' => $utm['utm_campaign'],
+      'utm_content' => $utm['utm_content'],
+      'utm_term' => $utm['utm_term'],
+      'ref' => $utm['ref'],
+    ];
+
+    $dbSaved = $dbInsert($dbHost, $dbPort, $dbUser, $dbPass, $dbName, $dbPayload);
+    if (!$dbSaved) {
+      $formErrors[] = '문의 저장에 실패했습니다. 관리자에게 문의해주세요.';
+    }
+
+    $headers = [
+      'From: ' . $mailFrom,
+      'Reply-To: ' . $email,
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=UTF-8',
+    ];
+    $encodedSubject = function_exists('mb_encode_mimeheader')
+      ? mb_encode_mimeheader($subject, 'UTF-8')
+      : $subject;
+    $mailSent = $dbSaved
+      ? mail($contactEmail, $encodedSubject, $emailBody, implode("\r\n", $headers))
+      : false;
+    if ($mailSent) {
+      $formSuccess = true;
+    } else {
+      if (!$mailSent) {
+        $formErrors[] = '이메일 전송에 실패했습니다. 잠시 후 다시 시도해주세요.';
+      }
+    }
+  }
+}
 ?>
 <!doctype html>
 <html lang="ko">
@@ -30,7 +245,7 @@ $utm = [
   <link rel="stylesheet" href="/contact/css/landing.css?v=120" />
 </head>
 
-<body>
+  <body data-form-success="<?= $formSuccess ? 'true' : 'false' ?>">
   <a class="skip" href="#content">본문 바로가기</a>
 
   <!-- Header: 스크롤 전 숨김, 스크롤하면 등장 -->
@@ -245,7 +460,13 @@ $utm = [
     </div>
 
     <div class="drawer__body">
-      <form class="form" action="#" method="post" novalidate>
+      <?php if ($formErrors !== []): ?>
+        <div class="formNotice formNotice--error">
+          <?= htmlspecialchars(implode("\n", $formErrors), ENT_QUOTES, 'UTF-8') ?>
+        </div>
+      <?php endif; ?>
+
+      <form class="form" action="" method="post" novalidate>
         <?php foreach ($utm as $k => $v): ?>
           <input type="hidden" name="<?= htmlspecialchars($k, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>" />
         <?php endforeach; ?>
@@ -258,6 +479,7 @@ $utm = [
         <div class="field">
           <label for="bizno">사업자번호 *</label>
           <input id="bizno" name="bizno" type="text" inputmode="numeric" autocomplete="off" required
+                 pattern="\\d{3}-\\d{2}-\\d{5}" maxlength="12"
                  placeholder="예: 123-45-67890" />
           <p class="hint">하이픈(-) 포함/미포함 모두 가능합니다.</p>
         </div>
@@ -349,12 +571,26 @@ $utm = [
         </div>
 
         <button class="btn btn--primary btn--block" type="submit">요청 접수</button>
-        <p class="hint">전송/저장 기능(app.js)은 다음 단계에서 분리 구현합니다.</p>
+        <p class="hint">요청 접수 후 담당자가 연락드립니다.</p>
       </form>
     </div>
   </aside>
 
   <div class="backdrop" data-drawer-close aria-hidden="true"></div>
+  <div class="submitOverlay" id="submitOverlay" aria-hidden="true">
+    <div class="submitOverlay__card" role="status" aria-live="polite">
+      <div class="submitOverlay__spinner" aria-hidden="true"></div>
+      <div class="submitOverlay__text">접수중...</div>
+    </div>
+  </div>
+  <div class="submitPopup" id="submitPopup" aria-hidden="true">
+    <div class="submitPopup__card" role="status" aria-live="polite">
+      <div class="submitPopup__icon" aria-hidden="true">✓</div>
+      <div class="submitPopup__title">접수완료!</div>
+      <div class="submitPopup__desc">요청이 정상적으로 접수되었습니다.</div>
+      <button class="btn btn--primary btn--sm submitPopup__btn" type="button" data-popup-close>확인</button>
+    </div>
+  </div>
 
   <script src="/contact/js/ui.js?v=120" defer></script>
 </body>
