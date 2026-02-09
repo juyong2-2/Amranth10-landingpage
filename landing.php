@@ -58,45 +58,53 @@ $dbInsert = static function (
   if (!class_exists('mysqli')) {
     return false;
   }
-  $connection = new mysqli($host, $user, $pass, $name, $port);
-  if ($connection->connect_errno) {
-    return false;
-  }
-  $connection->set_charset('utf8mb4');
+  mysqli_report(MYSQLI_REPORT_OFF);
+  try {
+    $connection = new mysqli($host, $user, $pass, $name, $port);
+    if ($connection->connect_errno) {
+      return false;
+    }
+    $connection->set_charset('utf8mb4');
 
-  $sql = 'INSERT INTO contact_inquiries
-    (company, bizno, name, phone, email, message, modules, budget_nonprofit, prod_outsource, prod_cost, utm_source, utm_medium, utm_campaign, utm_content, utm_term, ref)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-  $statement = $connection->prepare($sql);
-  if (!$statement) {
+    $sql = 'INSERT INTO contact_inquiries
+      (company, bizno, name, phone, email, message, modules, budget_nonprofit, prod_outsource, prod_cost, utm_source, utm_medium, utm_campaign, utm_content, utm_term, ref)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+    $statement = $connection->prepare($sql);
+    if (!$statement) {
+      $connection->close();
+      return false;
+    }
+
+    $statement->bind_param(
+      'ssssssssssssssss',
+      $payload['company'],
+      $payload['bizno'],
+      $payload['name'],
+      $payload['phone'],
+      $payload['email'],
+      $payload['message'],
+      $payload['modules'],
+      $payload['budget_nonprofit'],
+      $payload['prod_outsource'],
+      $payload['prod_cost'],
+      $payload['utm_source'],
+      $payload['utm_medium'],
+      $payload['utm_campaign'],
+      $payload['utm_content'],
+      $payload['utm_term'],
+      $payload['ref']
+    );
+
+    $result = $statement->execute();
+    $statement->close();
     $connection->close();
+    return $result;
+  } catch (Throwable $error) {
+    if (isset($connection) && $connection instanceof mysqli) {
+      $connection->close();
+    }
     return false;
   }
-
-  $statement->bind_param(
-    'ssssssssssssssss',
-    $payload['company'],
-    $payload['bizno'],
-    $payload['name'],
-    $payload['phone'],
-    $payload['email'],
-    $payload['message'],
-    $payload['modules'],
-    $payload['budget_nonprofit'],
-    $payload['prod_outsource'],
-    $payload['prod_cost'],
-    $payload['utm_source'],
-    $payload['utm_medium'],
-    $payload['utm_campaign'],
-    $payload['utm_content'],
-    $payload['utm_term'],
-    $payload['ref']
-  );
-
-  $result = $statement->execute();
-  $statement->close();
-  $connection->close();
-  return $result;
 };
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
