@@ -6,7 +6,18 @@ function q(string $key): string {
   return is_string($v) ? $v : '';
 }
 
-$config = require __DIR__ . '/config.php';
+$defaultConfig = [
+  'db_host' => 'localhost',
+  'db_user' => 'root',
+  'db_pass' => '',
+  'db_name' => 'amaranth10',
+  'db_port' => 3306,
+  'admin_email' => 'iyjy@duzon119.co.kr',
+  'mail_from' => 'no-reply@localhost',
+];
+$configFile = __DIR__ . '/config.php';
+$config = is_file($configFile) ? require $configFile : [];
+$config = array_merge($defaultConfig, is_array($config) ? $config : []);
 $contactEmail = $config['admin_email'];
 $mailFrom = $config['mail_from'];
 $formErrors = [];
