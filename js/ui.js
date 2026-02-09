@@ -157,7 +157,7 @@
   let submitPopup = $("#submitPopup");
   let popupClose = $("[data-popup-close]");
   const form = $(".form");
-  const popupStorageKey = "contactInquiryPending";
+  const popupCookieKey = "contact_inquiry_success";
 
   function ensurePopup() {
     if (submitPopup) return submitPopup;
@@ -179,28 +179,16 @@
     return submitPopup;
   }
 
-  function markPopupPending() {
-    try {
-      localStorage.setItem(popupStorageKey, String(Date.now()));
-    } catch (error) {
-      // ignore storage errors
-    }
+  function setPopupCookie() {
+    document.cookie = `${popupCookieKey}=1; path=/; max-age=300`;
   }
 
-  function clearPopupPending() {
-    try {
-      localStorage.removeItem(popupStorageKey);
-    } catch (error) {
-      // ignore storage errors
-    }
+  function clearPopupCookie() {
+    document.cookie = `${popupCookieKey}=; path=/; max-age=0`;
   }
 
-  function isPopupPending() {
-    try {
-      return Boolean(localStorage.getItem(popupStorageKey));
-    } catch (error) {
-      return false;
-    }
+  function hasPopupCookie() {
+    return document.cookie.split("; ").some((item) => item.startsWith(`${popupCookieKey}=`));
   }
 
   function formatBizno(value) {
@@ -247,14 +235,14 @@
     submitPopup.classList.remove("is-visible");
     submitPopup.classList.remove("is-animated");
     submitPopup.setAttribute("aria-hidden", "true");
-    clearPopupPending();
+    clearPopupCookie();
   }
 
   const successFlag = document.body?.dataset?.formSuccess === "true";
   if (successFlag) {
-    markPopupPending();
+    setPopupCookie();
     showPopup();
-  } else if (isPopupPending()) {
+  } else if (hasPopupCookie()) {
     showPopup();
   }
 

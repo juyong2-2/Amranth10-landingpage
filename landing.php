@@ -222,6 +222,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       : false;
     if ($mailSent) {
       $formSuccess = true;
+      setcookie('contact_inquiry_success', '1', [
+        'expires' => time() + 300,
+        'path' => '/',
+        'samesite' => 'Lax',
+      ]);
     } else {
       if (!$mailSent) {
         $formErrors[] = '이메일 전송에 실패했습니다. 잠시 후 다시 시도해주세요.';
